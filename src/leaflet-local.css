@@ -641,6 +641,40 @@ svg.leaflet-image-layer.leaflet-interactive path {
 	border-right-color: #fff;
 	}
 
+
+.smart-textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+  font-family: inherit;
+}
+
+.coords-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.coords-row input {
+  flex: 1;
+  padding: 8px;
+}
+
+.client-card {
+  background: #f9f9f9;
+  padding: 15px;
+  border-left: 5px solid #2ecc71;
+  border-radius: 4px;
+  color: #333;
+}
+
+.card-row {
+  margin-bottom: 5px;
+  font-size: 0.95rem;
+}
+
 /* Printing */
 
 @media print {
