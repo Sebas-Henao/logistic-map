@@ -7,10 +7,10 @@
   "scripts": {
     "dev": "vite",
     "preview": "vite preview",
-    "predepoy": "npm run build",
+    "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "vite build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
