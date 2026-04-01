@@ -28,8 +28,6 @@ export default function App() {
   const [routeName, setRouteName] = useState('Nombre de su nueva ruta');
   const [mode, setMode] = useState('plan');
   const [smartInput, setSmartInput] = useState('');
-  const [manualLat, setManualLat] = useState('');
-  const [manualLng, setManualLng] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('logistic_routes');
@@ -66,33 +64,43 @@ export default function App() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
   };
 
+  // Lógica mejorada para extraer coordenadas del final del texto
   const parseSmartInput = (text) => {
     const parts = text.split(/[-,\n]/).map(p => p.trim());
+    
+    // Asumimos que los últimos dos elementos son Lat y Lng
+    const lng = parseFloat(parts.pop());
+    const lat = parseFloat(parts.pop());
+
     return {
       nombre: parts[0] || 'Cliente Desconocido',
       direccion: parts[1] || 'Dirección no especificada',
       barrio: parts[2] || 'Sin barrio',
-      celular: parts[3] || 'Sin celular'
+      celular: parts[3] || 'Sin celular',
+      lat,
+      lng
     };
   };
 
   const confirmManualStop = () => {
-    const lat = parseFloat(manualLat);
-    const lng = parseFloat(manualLng);
-    if (isNaN(lat) || isNaN(lng)) {
-      setMessage('⚠️ Coordenadas inválidas.');
+    const cliente = parseSmartInput(smartInput);
+
+    if (isNaN(cliente.lat) || isNaN(cliente.lng)) {
+      setMessage('⚠️ Error: Asegúrate de incluir Latitud y Longitud al final.');
       return;
     }
-    const cliente = parseSmartInput(smartInput);
+
     const newStop = {
       id: `${Date.now()}`,
       address: cliente.direccion,
       fullDetails: cliente,
-      lat, lng,
+      lat: cliente.lat, 
+      lng: cliente.lng,
       status: 'pending'
     };
+
     setStops((prev) => [...prev, newStop]);
-    setSmartInput(''); setManualLat(''); setManualLng('');
+    setSmartInput('');
     setMessage(`✅ Agregado: ${cliente.nombre}`);
   };
 
@@ -108,7 +116,6 @@ export default function App() {
       setCurrentStopIndex(prev => prev + 1);
       openGoogleMaps(nextStop.lat, nextStop.lng);
     } else {
-      if (activeRouteId && window.confirm("¿Eliminar esta ruta de guardados?")) deleteRoute(activeRouteId);
       setMessage('🏁 ¡Entrega finalizada!');
       setMode('plan'); setStops([]); setActiveRouteId(null);
     }
@@ -166,17 +173,16 @@ export default function App() {
             <div className="plan-section">
               <div className="form-group">
                 <h3>📝 Nueva Parada</h3>
+                <p style={{fontSize: '0.8rem', color: '#666', marginBottom: '5px'}}>
+                  Formato: Nombre, Dirección, Barrio, Celular, Latitud, Longitud
+                </p>
                 <textarea
                   className="smart-input"
                   value={smartInput}
                   onChange={(e) => setSmartInput(e.target.value)}
-                  placeholder="Nombre - Dirección sin guión - Barrio - Celular"
-                  rows="3"
+                  placeholder="Ej: Juan Perez - Calle 10A #20 30 - Belén - 3001232036 -  6.24,  -75.58"
+                  rows="4"
                 />
-                <div className="coords-inputs">
-                  <input type="number" placeholder="Latitud" value={manualLat} onChange={(e) => setManualLat(e.target.value)} />
-                  <input type="number" placeholder="Longitud" value={manualLng} onChange={(e) => setManualLng(e.target.value)} />
-                </div>
                 <button onClick={confirmManualStop} className="btn-add">➕ Agregar a la Lista</button>
               </div>
 
@@ -191,8 +197,7 @@ export default function App() {
           )}
 
           <div className="saved-routes-section">
-            <h3>📚 Rutas Guardadas</h3>
-            {routes.length === 0 && <p className="empty-text">No hay rutas guardadas.</p>}
+            <h3>📚 Rutas Guardadas ({routes.length})</h3>
             <div className="routes-scroll">
               {routes.map(r => (
                 <div key={r.id} className="route-item">
