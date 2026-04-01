@@ -66,7 +66,7 @@ export default function App() {
 
   // Lógica mejorada para extraer coordenadas del final del texto
   const parseSmartInput = (text) => {
-    const parts = text.split(/[-,\n]/).map(p => p.trim());
+    const parts = text.split(/[,\n]/).map(p => p.trim());
     
     // Asumimos que los últimos dos elementos son Lat y Lng
     const lng = parseFloat(parts.pop());
