@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import './styles.css'; 
 import L from 'leaflet';
+import * as turf from '@turf/turf';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -25,7 +26,7 @@ export default function App() {
   const [activeRouteId, setActiveRouteId] = useState(null);
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const [message, setMessage] = useState('');
-  const [routeName, setRouteName] = useState('Nombre de su nueva ruta');
+  const [routeName, setRouteName] = useState('Mi Nueva Ruta');
   const [mode, setMode] = useState('plan');
   const [smartInput, setSmartInput] = useState('');
 
@@ -38,21 +39,16 @@ export default function App() {
     localStorage.setItem('logistic_routes', JSON.stringify(routes));
   }, [routes]);
 
-  const currentStop = useMemo(() => {
+  const currentStopsList = useMemo(() => {
     if (mode === 'active' && activeRouteId) {
       const route = routes.find((r) => r.id === activeRouteId);
-      return route?.stops?.[currentStopIndex] || null;
+      return route?.stops || [];
     }
-    return stops[currentStopIndex] || null;
-  }, [mode, activeRouteId, currentStopIndex, stops, routes]);
+    return stops;
+  }, [mode, activeRouteId, stops, routes]);
 
-  const nextStop = useMemo(() => {
-    if (mode === 'active' && activeRouteId) {
-      const route = routes.find((r) => r.id === activeRouteId);
-      return route?.stops?.[currentStopIndex + 1] || null;
-    }
-    return stops[currentStopIndex + 1] || null;
-  }, [mode, activeRouteId, currentStopIndex, stops, routes]);
+  const currentStop = currentStopsList[currentStopIndex] || null;
+  const nextStop = currentStopsList[currentStopIndex + 1] || null;
 
   const mapCenter = useMemo(() => {
     if (currentStop) return [currentStop.lat, currentStop.lng];
@@ -61,64 +57,92 @@ export default function App() {
 
   const openGoogleMaps = (lat, lng) => {
     if (!lat || !lng) return;
-    window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank');
+    window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
   };
 
-  // Lógica mejorada para extraer coordenadas del final del texto
   const parseSmartInput = (text) => {
-    const parts = text.split(/[,\n]/).map(p => p.trim());
-    
-    // Asumimos que los últimos dos elementos son Lat y Lng
-    const lng = parseFloat(parts.pop());
-    const lat = parseFloat(parts.pop());
-
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l !== "");
+    if (lines.length < 7) return null;
     return {
-      nombre: parts[0] || 'Cliente Desconocido',
-      direccion: parts[1] || 'Dirección no especificada',
-      barrio: parts[2] || 'Sin barrio',
-      celular: parts[3] || 'Sin celular',
-      Numpaq: parts[4] || '1',
-      lat,
-      lng
+      nombre: lines[0],
+      direccion: lines[1],
+      barrio: lines[2],
+      celular: lines[3],
+      Numpaq: lines[4],
+      lat: parseFloat(lines[5]),
+      lng: parseFloat(lines[6])
     };
   };
 
   const confirmManualStop = () => {
     const cliente = parseSmartInput(smartInput);
-
-    if (isNaN(cliente.lat) || isNaN(cliente.lng)) {
-      setMessage('⚠️ Error: Asegúrate de incluir Latitud y Longitud al final.');
+    if (!cliente || isNaN(cliente.lat) || isNaN(cliente.lng)) {
+      setMessage('⚠️ Error: El formato debe tener 7 líneas exactas.');
       return;
     }
-
     const newStop = {
       id: `${Date.now()}`,
       address: cliente.direccion,
       fullDetails: cliente,
       lat: cliente.lat, 
       lng: cliente.lng,
-      status: 'pending'
+      status: 'pending',
+      sector: 'S/D' // Sector sin determinar inicialmente
     };
-
     setStops((prev) => [...prev, newStop]);
     setSmartInput('');
     setMessage(`✅ Agregado: ${cliente.nombre}`);
+  };
+
+  const optimizeBySectors = () => {
+    if (stops.length < 2) return;
+    
+    const points = stops.map(s => turf.point([s.lng, s.lat], { originalId: s.id }));
+    const collection = turf.featureCollection(points);
+    const clustered = turf.clustersDbscan(collection, 0.2, { units: 'kilometers', minPoints: 1 });
+
+    const grouped = {};
+    clustered.features.forEach(f => {
+      // Si cluster es null es ruido (puntos aislados), lo marcamos como 'R'
+      const clusterId = f.properties.cluster !== null ? f.properties.cluster : 'R';
+      if (!grouped[clusterId]) grouped[clusterId] = [];
+      const stop = stops.find(s => s.id === f.properties.originalId);
+      
+      // Asignamos el ID del sector a la parada
+      grouped[clusterId].push({
+        ...stop, 
+        sector: clusterId === 'R' ? 'Aislado' : `Sector ${clusterId + 1}`
+      });
+    });
+
+    let optimizedList = [];
+    Object.keys(grouped).sort().forEach(key => {
+      optimizedList = [...optimizedList, ...grouped[key]];
+    });
+
+    setStops(optimizedList);
+    setMessage(`🎯 Sectores listos: ${Object.keys(grouped).length} zonas.`);
   };
 
   const startDelivery = () => {
     if (stops.length < 1) return;
     setMode('active');
     setCurrentStopIndex(0);
+    setActiveRouteId(null); 
     openGoogleMaps(stops[0].lat, stops[0].lng);
   };
 
   const completeStop = () => {
-    if (nextStop) {
-      setCurrentStopIndex(prev => prev + 1);
-      openGoogleMaps(nextStop.lat, nextStop.lng);
+    if (currentStopIndex < currentStopsList.length - 1) {
+      const nextIdx = currentStopIndex + 1;
+      setCurrentStopIndex(nextIdx);
+      openGoogleMaps(currentStopsList[nextIdx].lat, currentStopsList[nextIdx].lng);
     } else {
       setMessage('🏁 ¡Entrega finalizada!');
-      setMode('plan'); setStops([]); setActiveRouteId(null);
+      setMode('plan'); 
+      setStops([]); 
+      setActiveRouteId(null);
+      setCurrentStopIndex(0);
     }
   };
 
@@ -126,7 +150,8 @@ export default function App() {
     if (stops.length < 1) return;
     const newRoute = { id: Date.now().toString(), name: routeName, stops: [...stops], status: 'pending' };
     setRoutes(prev => [...prev, newRoute]);
-    setStops([]); setRouteName('Nueva Ruta');
+    setStops([]); 
+    setRouteName('Mi Nueva Ruta');
     setMessage('💾 Ruta guardada.');
   };
 
@@ -139,15 +164,14 @@ export default function App() {
 
   const deleteRoute = (id) => {
     setRoutes(prev => prev.filter(r => r.id !== id));
-    if (activeRouteId === id) { setMode('plan'); setActiveRouteId(null); }
-    setMessage('🗑️ Ruta eliminada.');
+    if (activeRouteId === id) setMode('plan');
   };
 
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>🚚 Logistic Map</h1>
-        <p>{mode === 'active' ? 'En ruta de entrega' : 'Planificación de despacho'}</p>
+        <h1>🚚 Logistic Map Pro</h1>
+        <p>{mode === 'active' ? '⚡ Ruta en curso' : '⚙️ Planificación'}</p>
       </header>
 
       <main className="main-layout">
@@ -155,7 +179,11 @@ export default function App() {
           
           {mode === 'active' ? (
             <div className="active-card">
-              <h2>📍 Parada {currentStopIndex + 1}</h2>
+              <div className="sector-tag" style={{background: '#6c5ce7', color: 'white', padding: '2px 8px', borderRadius: '4px', display: 'inline-block', marginBottom: '10px'}}>
+                {currentStop?.sector}
+              </div>
+              <h2>📍 Parada {currentStopIndex + 1} de {currentStopsList.length}</h2>
+              
               {currentStop && (
                 <div className="client-info">
                   <p><strong>👤 Cliente:</strong> {currentStop.fullDetails?.nombre}</p>
@@ -165,54 +193,60 @@ export default function App() {
                   <p><strong>📦 Cant paq:</strong> {currentStop.fullDetails?.Numpaq}</p>
                   <div className="btn-group">
                     <button onClick={() => openGoogleMaps(currentStop.lat, currentStop.lng)} className="btn-gps">Abrir GPS</button>
-                    <button onClick={completeStop} className="btn-next">Siguiente</button>
+                    <button onClick={completeStop} className="btn-next">
+                      {currentStopIndex === currentStopsList.length - 1 ? 'Finalizar' : 'Siguiente'}
+                    </button>
                   </div>
                 </div>
               )}
-              <button onClick={() => setMode('plan')} className="btn-cancel">Cancelar Entrega</button>
+              <button onClick={() => {setMode('plan'); setCurrentStopIndex(0);}} className="btn-cancel">Salir de la Ruta</button>
             </div>
           ) : (
             <div className="plan-section">
               <div className="form-group">
                 <h3>📝 Nueva Parada</h3>
-                <p style={{fontSize: '0.8rem', color: '#666', marginBottom: '5px'}}>
-                  Formato: Nombre, Dirección, Barrio, Celular, cantidad de paquetes, Latitud, Longitud
-                </p>
+                <p style={{fontSize: '0.9rem', color: '#555'}}>Formato ingreso: Nombre, dirección, barrio, celular, cantidad, latitud, longitud</p>
                 <textarea
                   className="smart-input"
                   value={smartInput}
                   onChange={(e) => setSmartInput(e.target.value)}
-                  placeholder="Ej: (usar enter al finalizar cada uno)     Juan Perez                    
-Calle 10A #20 30    
-Belén     
-3001232035
-2    
-6.24      
--75.58"
-                  rows="4"
+                  placeholder={"Nombre\nDirección\nBarrio\nCelular\nCantidad\nLatitud\nLongitud"}
+                  rows="8"
                 />
                 <button onClick={confirmManualStop} className="btn-add">➕ Agregar a la Lista</button>
               </div>
 
               <div className="route-controls">
+                <h3>⚙️ Controles de Ruta</h3>
                 <input className="route-name-input" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
-                <div className="btn-group">
-                  <button onClick={startDelivery} disabled={stops.length === 0} className="btn-start">🚀 Iniciar Ya</button>
-                  <button onClick={saveRoute} disabled={stops.length === 0} className="btn-save">💾 Guardar Ruta</button>
+                <div className="btn-group" style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                  <button onClick={optimizeBySectors} disabled={stops.length < 2} className="btn-start" style={{background: '#6c5ce7'}}>🎯 Agrupar por Sectores</button>
+                  <div style={{display: 'flex', gap: '10px'}}>
+                    <button onClick={startDelivery} disabled={stops.length === 0} className="btn-start" style={{flex: 1}}>🚀 Iniciar</button>
+                    <button onClick={saveRoute} disabled={stops.length === 0} className="btn-save" style={{flex: 1}}>💾 Guardar</button>
+                  </div>
                 </div>
+              </div>
+
+              <div className="stops-list-mini">
+                 <strong>Lista de carga ({stops.length}):</strong>
+                 <div className="mini-scroll" style={{maxHeight: '200px', overflowY: 'auto', background: '#f9f9f9', padding: '10px', borderRadius: '8px', border: '1px solid #ddd'}}>
+                  {stops.map((s, i) => (
+                    <div key={i} className="mini-item" style={{borderBottom: '1px solid #eee', padding: '5px 0', fontSize: '0.9rem'}}>
+                      <strong>{i+1}.</strong> {s.fullDetails.nombre} | 📦 {s.fullDetails.Numpaq} | <span style={{color: '#6c5ce7', fontWeight: 'bold'}}>{s.sector}</span>
+                    </div>
+                  ))}
+                 </div>
               </div>
             </div>
           )}
 
           <div className="saved-routes-section">
-            <h3>📚 Rutas Guardadas ({routes.length})</h3>
+            <h3>📚 Historial de Rutas</h3>
             <div className="routes-scroll">
               {routes.map(r => (
                 <div key={r.id} className="route-item">
-                  <div className="route-text">
-                    <strong>{r.name}</strong>
-                    <span>{r.stops.length} paquetes</span>
-                  </div>
+                  <div className="route-text"><strong>{r.name}</strong><span>{r.stops.length} envíos</span></div>
                   <div className="route-btns">
                     <button onClick={() => activateRoute(r)} className="btn-load">Cargar</button>
                     <button onClick={() => deleteRoute(r.id)} className="btn-delete">✕</button>
@@ -221,24 +255,25 @@ Belén
               ))}
             </div>
           </div>
-          {message && <div className="status-message">{message}</div>}
+          {message && <div className="status-message" style={{position: 'fixed', bottom: '20px', left: '20px', background: '#333', color: '#fff', padding: '10px 20px', borderRadius: '30px', zIndex: 1000}}>{message}</div>}
         </section>
 
         <section className="map-container-wrapper">
           <MapContainer center={mapCenter} zoom={15} className="leaflet-map">
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            {currentStop && (
-              <Marker position={[currentStop.lat, currentStop.lng]}>
+            {currentStopsList.map((stop, idx) => (
+              <Marker key={stop.id} position={[stop.lat, stop.lng]}>
                 <Popup>
-                  <strong>{currentStop.fullDetails?.nombre}</strong><br/>
-                  {currentStop.fullDetails?.direccion}
+                  <strong>{idx + 1}. {stop.fullDetails?.nombre}</strong><br/>
+                  Sector: {stop.sector}<br/>
+                  Paquetes: {stop.fullDetails?.Numpaq}
                 </Popup>
               </Marker>
-            )}
+            ))}
             {currentStop && nextStop && (
               <Polyline positions={[[currentStop.lat, currentStop.lng], [nextStop.lat, nextStop.lng]]} color="#3498db" dashArray="10, 10" />
             )}
-            {currentStop && <FlyToPoint lat={currentStop.lat} lng={currentStop.lng} />}
+            <FlyToPoint lat={currentStop?.lat} lng={currentStop?.lng} />
           </MapContainer>
         </section>
       </main>

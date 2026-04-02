@@ -48,6 +48,7 @@ body {
 }
 
 .active-card, .form-group, .route-controls {
+  margin:8px;
   background: var(--panel);
   padding: 20px;
   border-radius: 12px;
