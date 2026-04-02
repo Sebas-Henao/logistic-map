@@ -77,6 +77,7 @@ export default function App() {
       direccion: parts[1] || 'Dirección no especificada',
       barrio: parts[2] || 'Sin barrio',
       celular: parts[3] || 'Sin celular',
+      Numpaq: parts[4] || '1',
       lat,
       lng
     };
@@ -161,6 +162,7 @@ export default function App() {
                   <p><strong>🏠 Dirección:</strong> {currentStop.fullDetails?.direccion}</p>
                   <p><strong>🏘️ Barrio:</strong> {currentStop.fullDetails?.barrio}</p>
                   <p><strong>📱 Celular:</strong> {currentStop.fullDetails?.celular}</p>
+                  <p><strong>📦 Cant paq:</strong> {currentStop.fullDetails?.Numpaq}</p>
                   <div className="btn-group">
                     <button onClick={() => openGoogleMaps(currentStop.lat, currentStop.lng)} className="btn-gps">Abrir GPS</button>
                     <button onClick={completeStop} className="btn-next">Siguiente</button>
@@ -174,13 +176,19 @@ export default function App() {
               <div className="form-group">
                 <h3>📝 Nueva Parada</h3>
                 <p style={{fontSize: '0.8rem', color: '#666', marginBottom: '5px'}}>
-                  Formato: Nombre, Dirección, Barrio, Celular, Latitud, Longitud
+                  Formato: Nombre, Dirección, Barrio, Celular, cantidad de paquetes, Latitud, Longitud
                 </p>
                 <textarea
                   className="smart-input"
                   value={smartInput}
                   onChange={(e) => setSmartInput(e.target.value)}
-                  placeholder="Ej: Juan Perez - Calle 10A #20 30 - Belén - 3001232036 -  6.24,  -75.58"
+                  placeholder="Ej: (usar enter al finalizar cada uno)     Juan Perez                    
+Calle 10A #20 30    
+Belén     
+3001232035
+2    
+6.24      
+-75.58"
                   rows="4"
                 />
                 <button onClick={confirmManualStop} className="btn-add">➕ Agregar a la Lista</button>
