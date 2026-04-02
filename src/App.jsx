@@ -1,9 +1,9 @@
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import React, { useEffect, useMemo, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
-import './styles.css'; 
-import L from 'leaflet';
 import * as turf from '@turf/turf';
+import L from 'leaflet';
+import './styles.css'; 
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -21,14 +21,14 @@ function FlyToPoint({ lat, lng }) {
 }
 
 export default function App() {
-  const [stops, setStops] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [activeRouteId, setActiveRouteId] = useState(null);
+  const [stops, setStops]                       = useState([]);
+  const [routes, setRoutes]                     = useState([]);
+  const [activeRouteId, setActiveRouteId]       = useState(null);
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
-  const [message, setMessage] = useState('');
-  const [routeName, setRouteName] = useState('Mi Nueva Ruta');
-  const [mode, setMode] = useState('plan');
-  const [smartInput, setSmartInput] = useState('');
+  const [message, setMessage]                   = useState('');
+  const [routeName, setRouteName]               = useState('Mi Nueva Ruta');
+  const [mode, setMode]                         = useState('plan');
+  const [smartInput, setSmartInput]             = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('logistic_routes');
@@ -87,7 +87,7 @@ export default function App() {
       lat: cliente.lat, 
       lng: cliente.lng,
       status: 'pending',
-      sector: 'S/D' // Sector sin determinar inicialmente
+      sector: 'S/D'
     };
     setStops((prev) => [...prev, newStop]);
     setSmartInput('');
@@ -103,12 +103,12 @@ export default function App() {
 
     const grouped = {};
     clustered.features.forEach(f => {
-      // Si cluster es null es ruido (puntos aislados), lo marcamos como 'R'
+      
       const clusterId = f.properties.cluster !== null ? f.properties.cluster : 'R';
       if (!grouped[clusterId]) grouped[clusterId] = [];
       const stop = stops.find(s => s.id === f.properties.originalId);
       
-      // Asignamos el ID del sector a la parada
+      
       grouped[clusterId].push({
         ...stop, 
         sector: clusterId === 'R' ? 'Aislado' : `Sector ${clusterId + 1}`
@@ -218,12 +218,34 @@ export default function App() {
 
               <div className="route-controls">
                 <h3>⚙️ Controles de Ruta</h3>
-                <input className="route-name-input" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                <input 
+                  className="route-name-input" 
+                  value={routeName} 
+                  onChange={(e) => setRouteName(e.target.value)} 
+                />
                 <div className="btn-group" style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
-                  <button onClick={optimizeBySectors} disabled={stops.length < 2} className="btn-start" style={{background: '#6c5ce7'}}>🎯 Agrupar por Sectores</button>
+                  <button 
+                    onClick={optimizeBySectors} 
+                    disabled={stops.length < 2} 
+                    className="btn-start" 
+                    style={{background: '#6c5ce7'}}>
+                      🎯 Agrupar por Sectores
+                  </button>
                   <div style={{display: 'flex', gap: '10px'}}>
-                    <button onClick={startDelivery} disabled={stops.length === 0} className="btn-start" style={{flex: 1}}>🚀 Iniciar</button>
-                    <button onClick={saveRoute} disabled={stops.length === 0} className="btn-save" style={{flex: 1}}>💾 Guardar</button>
+                    <button 
+                      onClick={startDelivery} 
+                      disabled={stops.length === 0} 
+                      className="btn-start" 
+                      style={{flex: 1}}>
+                        🚀 Iniciar
+                    </button>
+                    <button 
+                      onClick={saveRoute} 
+                      disabled={stops.length === 0} 
+                      className="btn-save" 
+                      style={{flex: 1}}>
+                        💾 Guardar
+                    </button>
                   </div>
                 </div>
               </div>
@@ -248,8 +270,16 @@ export default function App() {
                 <div key={r.id} className="route-item">
                   <div className="route-text"><strong>{r.name}</strong><span>{r.stops.length} envíos</span></div>
                   <div className="route-btns">
-                    <button onClick={() => activateRoute(r)} className="btn-load">Cargar</button>
-                    <button onClick={() => deleteRoute(r.id)} className="btn-delete">✕</button>
+                    <button 
+                      onClick={() => activateRoute(r)} 
+                      className="btn-load">
+                        Cargar
+                    </button>
+                    <button 
+                      onClick={() => deleteRoute(r.id)} 
+                      className="btn-delete">
+                        ✕
+                    </button>
                   </div>
                 </div>
               ))}
